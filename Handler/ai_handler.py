@@ -81,7 +81,7 @@ class ChatBot:
             raw_user_input = input("Prompt here> ")
 
         # ANTI-JAILBREAK CLEANING: Strip out markdown headers and system keywords
-        # This stops the user from injecting fake instructions into your history block
+        # This stops the user from injecting fake instructions into history block
         clean_input = raw_user_input.strip()
         dangerous_keywords = [
             "###", "SYSTEM INSTRUCTIONS", "CRITICAL CONSTRAINT", 
