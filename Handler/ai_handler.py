@@ -1,4 +1,6 @@
 import inspect
+import json
+import os
 import keyboard
 import ollama
 import Handler.debugger as dbg
@@ -33,6 +35,22 @@ class ChatBot:
 
         # Force client to use direct local IPv4 to bypass Windows proxy routing drops
         self.client = ollama.Client(host="http://127.0.0.1:11434")
+
+        # LIGHTWEIGHT MEMORY: Load long-term facts from a local flat file
+        # Get the exact folder where this Python file lives
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Safely join it to relative path
+        self.memory_file = os.path.abspath(os.path.join(script_dir, "../data-folder/user_facts.json"))
+        self.long_term_facts = self._load_facts()
+
+    def _load_facts(self):
+        """Load known facts about the user from a simple JSON file."""
+        try:
+            with open(self.memory_file, "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return []  # Start empty if no file exists yet
 
     def _sanatise_response(self):
         """Clean data on the fly and yield chunks one-by-one to preserve streaming."""
@@ -86,9 +104,13 @@ class ChatBot:
             self.history.pop(0)
 
         # Rebuild full conversation history prompt context
+        facts_block = "\n".join([f"- {fact}" for fact in self.long_term_facts]) if self.long_term_facts else "- No prior facts known yet."
+
         history_block = "\n".join(self.history)
+        
         full_prompt = (
             f"### SYSTEM INSTRUCTIONS\n{self.system_instructions}\n\n"
+            f"### KNOWN FACTS (LONG-TERM MEMORY)\n{facts_block}\n\n"
             f"### CONVERSATION HISTORY\n{history_block}\n\n"
             f"### NEXT RESPONSE:\n{self.name}:"
         )
