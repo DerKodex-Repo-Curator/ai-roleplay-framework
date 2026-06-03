@@ -41,7 +41,7 @@ class ChatBot:
         script_dir = os.path.dirname(os.path.abspath(__file__))
 
         # Safely join it to relative path
-        self.memory_file = os.path.abspath(os.path.join(script_dir, "../data-folder/user_facts.json"))
+        self.memory_file = os.path.abspath(os.path.join(script_dir, "../../data-folder/user_facts.json"))
         self.long_term_facts = self._load_facts()
 
     def _load_facts(self):
