@@ -21,6 +21,11 @@ def debug(title, *msg):
     print("\n" + "~" * 100)
     print(f"[DEBUG @ {filename}:{lineno} in {func_name}()]")
     print(f"🕒 {datetime.now().strftime('%H:%M:%S')} | {title}")
-    for comment in msg:
-        print("   ➤", comment)
-    print("~" * 100)
+    print()
+    try:
+        for comment in msg:
+            print("   ➤", comment)
+    except KeyError as error:
+        print(f"Debug Error: {error}")
+
+    print("\n" + "~" * 100)

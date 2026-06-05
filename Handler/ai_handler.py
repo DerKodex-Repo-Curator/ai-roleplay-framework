@@ -27,11 +27,18 @@ class ChatBot:
             f"Reply in exactly 1 or 2 sentences. Do not explain your role."
         )
 
+        self.Banned_Key_Word = [
+            "###", "SYSTEM INSTRUCTIONS", "CRITICAL CONSTRAINT", 
+            "CONVERSATION HISTORY", "NEXT RESPONSE", "Assistant:", 
+            f"{self.name}:", "User:"
+        ]
+
         # Conversation log tracking array
         self.history = []
         
         # Max message capacity (6 items = 3 user inputs + 3 entity replies)
-        self.max_history = 6
+        self.max_history = 20
+        self.max_user_input = 300
 
         # Force client to use direct local IPv4 to bypass Windows proxy routing drops
         self.client = ollama.Client(host="http://127.0.0.1:11434")
@@ -41,7 +48,7 @@ class ChatBot:
         script_dir = os.path.dirname(os.path.abspath(__file__))
 
         # Safely join it to relative path
-        self.memory_file = os.path.abspath(os.path.join(script_dir, "../../data-folder/user_facts.json"))
+        self.memory_file = os.path.abspath(os.path.join(script_dir, "../data-folder/user_facts.json"))
         self.long_term_facts = self._load_facts()
 
     def _load_facts(self):
@@ -49,7 +56,8 @@ class ChatBot:
         try:
             with open(self.memory_file, "r") as f:
                 return json.load(f)
-        except FileNotFoundError:
+        except FileNotFoundError as fileError:
+            debug("Error", f"Error FileNotFound: {fileError}")
             return []  # Start empty if no file exists yet
 
     def _sanatise_response(self):
@@ -58,6 +66,10 @@ class ChatBot:
         try:
             for chunk in self.response:
                 part = chunk.get('response') or chunk.get('response_part') or ''
+
+                for keyword in self.Banned_Key_Word:
+                    part = part.replace(keyword, "")
+
                 self.output_chunk.append(part)
                 yield part  # Yields the token instantly without draining the rest of the stream
 
@@ -65,7 +77,7 @@ class ChatBot:
             full_output = "".join(self.output_chunk)
             self.history.append(f"{self.name}: {full_output.strip()}")
             
-            debug(f"function {inspect.currentframe().f_code.co_name}", f"Output: {full_output}")
+            debug(f"function {inspect.currentframe().f_code.co_name}", f"Output: {full_output}", f"Output chunk: {self.output_chunk}")
             
         except Exception as e:
             debug("Error while processing stream chunks", e)
@@ -83,18 +95,15 @@ class ChatBot:
         # ANTI-JAILBREAK CLEANING: Strip out markdown headers and system keywords
         # This stops the user from injecting fake instructions into history block
         clean_input = raw_user_input.strip()
-        dangerous_keywords = [
-            "###", "SYSTEM INSTRUCTIONS", "CRITICAL CONSTRAINT", 
-            "CONVERSATION HISTORY", "NEXT RESPONSE", "Assistant:", 
-            f"{self.name}:", "User:"
-        ]
+        dangerous_keywords = self.Banned_Key_Word
+        max_input = self.max_user_input
         
         for keyword in dangerous_keywords:
             clean_input = clean_input.replace(keyword, "")
 
         # If the user tries to paste a massive text wall to break the bot, truncate it
-        if len(clean_input) > 300:
-            clean_input = clean_input[:300] + "... [input truncated for safety]"
+        if len(clean_input) > max_input:
+            clean_input = clean_input[:max_input] + "... [input truncated for safety]"
 
         # Log the completely safe, cleaned text into the memory list
         self.history.append(f"User: {clean_input.strip()}")
@@ -120,13 +129,31 @@ class ChatBot:
             model=self.model, prompt=full_prompt, stream=True, keep_alive=True
         )
 
-        self.response = response
-        debug(
-            "Function chat",
-            f"User input: {clean_input}",
-            f"Response: {response}",
-        )
-        return self.response
+        try:
+            # Loop until getting response back.
+            while not response:
+                debug(
+                    "Function chat", 
+                    "Waiting for response...",
+                )
+                continue
+
+            self.response = response
+            debug(
+                "Function chat",
+                f"User input: {clean_input}",
+                f"Response: {response}",
+            )
+            
+            return self.response
+        except Exception as Error:
+            # If error  tells the debugger there's an error and return nothing.
+            debug(
+                "Function chat",
+                f"Unexpected Error: {Error}"
+            )
+
+            return None
 
 
     def show_output(self, cleaned_stream):
@@ -156,6 +183,6 @@ class ChatBot:
                 self.show_output(cleaned_stream)
 
         except Exception as e:
-            debug("Error in function chat", e)
+            debug("Error in function chat", f"Errortype: {e}")
             print("\nSession halted due to connection disruption.")
             return
